@@ -39,11 +39,77 @@
 
   Testing the server - run `npm run test-todoServer` command in terminal
  */
-  const express = require('express');
-  const bodyParser = require('body-parser');
-  
-  const app = express();
-  
-  app.use(bodyParser.json());
-  
-  module.exports = app;
+const express = require("express");
+const bodyParser = require("body-parser");
+const { v4: uuidv4 } = require("uuid");
+const fs = require("fs");
+const path = require("path");
+
+const app = express();
+app.use(bodyParser.json());
+
+const dataFile = path.join(__dirname, "todos.json");
+
+// Load todos from file if exists
+let todos = [];
+if (fs.existsSync(dataFile)) {
+  const raw = fs.readFileSync(dataFile);
+  todos = JSON.parse(raw);
+}
+
+// Helper to save todos to file
+function saveTodos() {
+  fs.writeFileSync(dataFile, JSON.stringify(todos, null, 2));
+}
+
+// 1. GET /todos - list all
+app.get("/todos", (req, res) => {
+  res.status(200).json(todos);
+});
+
+// 2. GET /todos/:id - get by ID
+app.get("/todos/:id", (req, res) => {
+  const todo = todos.find(t => t.id === req.params.id);
+  if (!todo) return res.status(404).send("Not Found");
+  res.status(200).json(todo);
+});
+
+// 3. POST /todos - create new
+app.post("/todos", (req, res) => {
+  const { title, description, completed = false } = req.body;
+  const newTodo = { id: uuidv4(), title, description, completed };
+  todos.push(newTodo);
+  saveTodos();
+  res.status(201).json({ id: newTodo.id });
+});
+
+// 4. PUT /todos/:id - update
+app.put("/todos/:id", (req, res) => {
+  const todo = todos.find(t => t.id === req.params.id);
+  if (!todo) return res.status(404).send("Not Found");
+
+  const { title, description, completed } = req.body;
+  if (title !== undefined) todo.title = title;
+  if (description !== undefined) todo.description = description;
+  if (completed !== undefined) todo.completed = completed;
+
+  saveTodos();
+  res.status(200).json(todo);
+});
+
+// 5. DELETE /todos/:id - delete
+app.delete("/todos/:id", (req, res) => {
+  const index = todos.findIndex(t => t.id === req.params.id);
+  if (index === -1) return res.status(404).send("Not Found");
+
+  todos.splice(index, 1);
+  saveTodos();
+  res.status(200).send("Deleted");
+});
+
+// Catch-all 404
+app.use((req, res) => {
+  res.status(404).send("Not Found");
+});
+
+module.exports = app;
